@@ -15,8 +15,11 @@ glm::mat4 viewMat;
 
 GLuint pvmMatrixID;
 
-float rotAngle = 0.0f;
-int isDrawingCar = false;
+float upperArmRotation = 0.0f;
+float lowerArmRotation = 0.0f;
+float upperLegRotation = 0.0f;
+float lowerLegRotation = 0.0f;
+float elapsedTime = 0.0f;
 
 typedef glm::vec4  color4;
 typedef glm::vec4  point4;
@@ -81,6 +84,45 @@ colorcube()
 }
 
 //----------------------------------------------------------------------------
+struct Keyframe {
+    float time;         // 키프레임 시간 (초 단위)
+    float rotationAngle;     // 해당 시간에서의 회전 각도
+};
+
+//----------------------------------------------------------------------------
+const int numKeyframes = 4;
+const float cycleTime = 2000.0f;
+
+// 팔 하부, 다리 하부의 키프레임 데이터
+Keyframe upperArmKeyframes[numKeyframes] = {
+	{ 0.0f, glm::radians(-60.0f) },
+	{ cycleTime / 3, glm::radians(-30.0f) },
+	{ cycleTime * 2 / 3, glm::radians(0.0f) },
+	{ cycleTime, glm::radians(30.0f) }
+};
+
+Keyframe lowerArmKeyframes[numKeyframes] = {
+	{ 0.0f, glm::radians(15.0f) },
+	{ cycleTime / 3, glm::radians(30.0f) },
+	{ cycleTime * 2 / 3, glm::radians(90.0f) },
+	{ cycleTime, glm::radians(110.0f) }
+};
+
+Keyframe upperLegKeyframes[numKeyframes] = {
+	{ 0.0f, glm::radians(45.0f) },
+	{ cycleTime / 3, glm::radians(15.0f) },
+	{ cycleTime * 2 / 3, glm::radians(0.0f) },
+	{ cycleTime, glm::radians(-15.0f) }
+};
+
+Keyframe lowerLegKeyframes[numKeyframes] = {
+	{ 0.0f, glm::radians(30.0f) },
+	{ cycleTime / 3, glm::radians(-30.0f) },
+	{ cycleTime * 2 / 3, glm::radians(-90.0f) },
+	{ cycleTime, glm::radians(-60.0f) }
+};
+
+//----------------------------------------------------------------------------
 
 // OpenGL initialization
 void
@@ -122,7 +164,7 @@ init()
 	// vertical fov, aspect ratio, near plane, far plane
 	projectMat = glm::perspective(glm::radians(65.0f), 1.0f, 0.1f, 100.0f);
 	// eye position, look at, up
-	viewMat = glm::lookAt(glm::vec3(0, 0, 2), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+	viewMat = glm::lookAt(glm::vec3(2, 0.5, -0.3), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
 
 	glEnable(GL_DEPTH_TEST);
 	glClearColor(0.0, 0.0, 0.0, 1.0);
@@ -130,52 +172,108 @@ init()
 
 //----------------------------------------------------------------------------
 
-void drawCar(glm::mat4 carMat)
-{
-	glm::mat4 modelMat, pvmMat;
-	glm::vec3 wheelPos[4];
-
-	wheelPos[0] = glm::vec3(0.3, 0.24, -0.1); // rear right
-	wheelPos[1] = glm::vec3(0.3, -0.24, -0.1); // rear left
-	wheelPos[2] = glm::vec3(-0.3, 0.24, -0.1); // front right
-	wheelPos[3] = glm::vec3(-0.3, -0.24, -0.1); // front left
-
-	// car body
-	modelMat = glm::scale(carMat, glm::vec3(1, 0.6, 0.2));
-	pvmMat = projectMat * viewMat * modelMat;
-	glUniformMatrix4fv(pvmMatrixID, 1, GL_FALSE, &pvmMat[0][0]);
-	glDrawArrays(GL_TRIANGLES, 0, NumVertices);
-
-	// car top
-	modelMat = glm::translate(carMat, glm::vec3(0, 0, 0.2));  //P*V*C*T*S*v
-	modelMat = glm::scale(modelMat, glm::vec3(0.5, 0.6, 0.2));
-	pvmMat = projectMat * viewMat * modelMat;
-	glUniformMatrix4fv(pvmMatrixID, 1, GL_FALSE, &pvmMat[0][0]);
-	glDrawArrays(GL_TRIANGLES, 0, NumVertices);
-
-	// car wheel
-	for (int i = 0; i < 4; i++)
-	{
-		modelMat = glm::translate(carMat, wheelPos[i]);  //P*V*C*T*S*v
-		modelMat = glm::scale(modelMat, glm::vec3(0.2, 0.1, 0.2));
-		modelMat = glm::rotate(modelMat, -rotAngle*50.0f, glm::vec3(0, 1, 0));
-		pvmMat = projectMat * viewMat * modelMat;
-		glUniformMatrix4fv(pvmMatrixID, 1, GL_FALSE, &pvmMat[0][0]);
-		glDrawArrays(GL_TRIANGLES, 0, NumVertices);
+float interpolateKeyframes(const Keyframe keyframes[], int numKeyframes, float time) {
+	if (time < 0.0f) {
+		time = -time;
 	}
+	else if (time > cycleTime) {
+		time = 2 * cycleTime - time;
+	}
+
+	for (int i = 0; i < numKeyframes - 1; i++) {
+		const Keyframe& kf1 = keyframes[i];
+		const Keyframe& kf2 = keyframes[i + 1];
+
+		if (time >= kf1.time && time <= kf2.time) {
+			float t = (time - kf1.time) / (kf2.time - kf1.time); // 0.0 ~ 1.0 사이 값
+			return glm::mix(kf1.rotationAngle, kf2.rotationAngle, t);
+		}
+	}
+	return 0.0f; // 기본값
 }
 
 void drawMan(glm::mat4 manMat)
 {
 	glm::mat4 modelMat, pvmMat;
-	glm::vec3 armPos[4], legPos[4];
+	glm::vec3 armPos[2], legPos[2];
 
-	//body
-	modelMat = glm::scale(manMat, glm::vec3(0.5, 0.7, 1));
 
+	// limb positions
+	armPos[0] = glm::vec3(-0.5, 0.2, 0); // left upper arm
+	armPos[1] = glm::vec3(0.5, 0.2, 0);  // right upper arm
+
+	legPos[0] = glm::vec3(-0.25, -0.8, 0); // left upper leg
+	legPos[1] = glm::vec3(0.25, -0.8, 0);  // right upper leg
+
+	// man body
+	modelMat = glm::scale(manMat, glm::vec3(0.7, 1, 0.5));
 	pvmMat = projectMat * viewMat * modelMat;
 	glUniformMatrix4fv(pvmMatrixID, 1, GL_FALSE, &pvmMat[0][0]);
 	glDrawArrays(GL_TRIANGLES, 0, NumVertices);
+
+	// man head
+	modelMat = glm::translate(manMat, glm::vec3(0, 0.7, 0));
+	modelMat = glm::scale(modelMat, glm::vec3(0.3, 0.3, 0.3));
+	pvmMat = projectMat * viewMat * modelMat;
+	glUniformMatrix4fv(pvmMatrixID, 1, GL_FALSE, &pvmMat[0][0]);
+	glDrawArrays(GL_TRIANGLES, 0, NumVertices);
+
+	// man limbs
+	for (int i = 0; i < 2; ++i) {
+
+		if (i == 0) {
+			upperArmRotation = interpolateKeyframes(upperArmKeyframes, numKeyframes, elapsedTime);
+			lowerArmRotation = interpolateKeyframes(lowerArmKeyframes, numKeyframes, elapsedTime);
+			upperLegRotation = interpolateKeyframes(upperLegKeyframes, numKeyframes, elapsedTime);
+			lowerLegRotation = interpolateKeyframes(lowerLegKeyframes, numKeyframes, elapsedTime);
+		}
+		else {
+			upperArmRotation = interpolateKeyframes(upperArmKeyframes, numKeyframes, cycleTime - elapsedTime);
+			lowerArmRotation = interpolateKeyframes(lowerArmKeyframes, numKeyframes, cycleTime - elapsedTime);
+			upperLegRotation = interpolateKeyframes(upperLegKeyframes, numKeyframes, cycleTime - elapsedTime);
+			lowerLegRotation = interpolateKeyframes(lowerLegKeyframes, numKeyframes, cycleTime - elapsedTime);
+		}
+
+		// 팔 상부 회전
+		modelMat = glm::translate(manMat, armPos[i]);
+		modelMat = glm::translate(modelMat, glm::vec3(0.0, 0.2, 0.0));
+		modelMat = glm::rotate(modelMat, upperArmRotation, glm::vec3(1, 0, 0)); // 키프레임 보간 값 사용
+		modelMat = glm::translate(modelMat, glm::vec3(0.0, -0.2, 0.0));
+		modelMat = glm::scale(modelMat, glm::vec3(0.2, 0.4, 0.2));
+		pvmMat = projectMat * viewMat * modelMat;
+		glUniformMatrix4fv(pvmMatrixID, 1, GL_FALSE, &pvmMat[0][0]);
+		glDrawArrays(GL_TRIANGLES, 0, NumVertices);
+
+		// 팔 하부 회전
+		glm::vec4 upperArmBottomPos = modelMat * glm::vec4(0.0, -0.4, 0.0, 1.0);
+		modelMat = glm::translate(manMat, glm::vec3(upperArmBottomPos));
+		modelMat = glm::rotate(modelMat, lowerArmRotation, glm::vec3(1, 0, 0)); // 키프레임 보간 값 사용
+		modelMat = glm::translate(modelMat, glm::vec3(0.0, -0.2, 0.0));
+		modelMat = glm::scale(modelMat, glm::vec3(0.2, 0.4, 0.2));
+		pvmMat = projectMat * viewMat * modelMat;
+		glUniformMatrix4fv(pvmMatrixID, 1, GL_FALSE, &pvmMat[0][0]);
+		glDrawArrays(GL_TRIANGLES, 0, NumVertices);
+
+		// 다리 상부 회전
+		modelMat = glm::translate(manMat, legPos[i]);
+		modelMat = glm::translate(modelMat, glm::vec3(0.0, 0.2, 0.0));
+		modelMat = glm::rotate(modelMat, upperLegRotation, glm::vec3(1, 0, 0)); // 키프레임 보간 값 사용
+		modelMat = glm::translate(modelMat, glm::vec3(0.0, -0.2, 0.0));
+		modelMat = glm::scale(modelMat, glm::vec3(0.2, 0.4, 0.2));
+		pvmMat = projectMat * viewMat * modelMat;
+		glUniformMatrix4fv(pvmMatrixID, 1, GL_FALSE, &pvmMat[0][0]);
+		glDrawArrays(GL_TRIANGLES, 0, NumVertices);
+
+		// 다리 하부 회전
+		glm::vec4 upperLegBottomPos = modelMat * glm::vec4(0.0, -0.4, 0.0, 1.0);
+		modelMat = glm::translate(manMat, glm::vec3(upperLegBottomPos));
+		modelMat = glm::rotate(modelMat, lowerLegRotation, glm::vec3(1, 0, 0)); // 키프레임 보간 값 사용
+		modelMat = glm::translate(modelMat, glm::vec3(0.0, -0.2, 0.0));
+		modelMat = glm::scale(modelMat, glm::vec3(0.2, 0.4, 0.2));
+		pvmMat = projectMat * viewMat * modelMat;
+		glUniformMatrix4fv(pvmMatrixID, 1, GL_FALSE, &pvmMat[0][0]);
+		glDrawArrays(GL_TRIANGLES, 0, NumVertices);
+	}
 }
 
 void display(void)
@@ -185,20 +283,9 @@ void display(void)
 
 	// other transformation matrices, rotation angle, rotation axis
 	// == modeling transformation
-	worldMat = glm::rotate(glm::mat4(1.0f), rotAngle, glm::vec3(1.0f, 1.0f, 0.0f));
+	worldMat = glm::mat4(1.0f);
 
 	drawMan(worldMat);
-
-	/*if (isDrawingCar)
-	{
-		drawCar(worldMat);
-	}
-	else
-	{
-		pvmMat = projectMat * viewMat * worldMat;
-		glUniformMatrix4fv(pvmMatrixID, 1, GL_FALSE, &pvmMat[0][0]);
-		glDrawArrays(GL_TRIANGLES, 0, NumVertices);
-	}*/
 
 	glutSwapBuffers();
 }
@@ -207,17 +294,12 @@ void display(void)
 
 void idle()
 {
-	static int prevTime = glutGet(GLUT_ELAPSED_TIME);
+	static int startTime = glutGet(GLUT_ELAPSED_TIME);
 	int currTime = glutGet(GLUT_ELAPSED_TIME);
 
-	if (abs(currTime - prevTime) >= 20)
-	{
-		float t = abs(currTime - prevTime);
-		// 10초에 한바퀴
-		rotAngle += glm::radians(t*360.0f / 10000.0f);
-		prevTime = currTime;
-		glutPostRedisplay();
-	}
+	elapsedTime = fmod(abs(currTime - startTime), 2*cycleTime);
+
+	glutPostRedisplay();
 }
 
 //----------------------------------------------------------------------------
@@ -226,8 +308,14 @@ void
 keyboard(unsigned char key, int x, int y)
 {
 	switch (key) {
-	case 'c': case 'C':
-		isDrawingCar = !isDrawingCar;
+	case 49:	// 1
+		viewMat = glm::lookAt(glm::vec3(2, 0.5, -0.3), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+		break;
+	case 50:	// 2
+		viewMat = glm::lookAt(glm::vec3(0.3, 1.0, 2.0), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+		break;
+	case 51:	// 3
+		viewMat = glm::lookAt(glm::vec3(-0.1, 0.5, -2.0), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
 		break;
 	case 033:  // Escape key
 	case 'q': case 'Q':
