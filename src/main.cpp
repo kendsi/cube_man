@@ -18,9 +18,8 @@ glm::mat4 projectMat;
 glm::mat4 viewMat;
 glm::mat4 modelMat = glm::mat4(1.0f);
 
-int shadeMode = NO_LIGHT;
-int isTexture = false;
-int isRotate = false;
+int shadeMode = PHONG;
+int isTexture = true;
 
 GLuint projectMatrixID;
 GLuint viewMatrixID;
@@ -59,16 +58,16 @@ point4 vertices[8] = {
 };
 
 // RGBA colors
-//color4 vertex_colors[8] = {
-//	color4(0.0, 0.0, 0.0, 1.0),		// black
-//	color4(0.0, 1.0, 1.0, 1.0),		// cyan
-//	color4(1.0, 0.0, 1.0, 1.0),		// magenta
-//	color4(1.0, 1.0, 0.0, 1.0),		// yellow
-//	color4(1.0, 0.0, 0.0, 1.0),		// red
-//	color4(0.0, 1.0, 0.0, 1.0),		// green
-//	color4(0.0, 0.0, 1.0, 1.0),		// blue
-//	color4(1.0, 1.0, 1.0, 1.0)		// white
-//};
+color4 vertex_colors[8] = {
+	color4(0.0, 0.0, 0.0, 1.0),		// black
+	color4(0.0, 1.0, 1.0, 1.0),		// cyan
+	color4(1.0, 0.0, 1.0, 1.0),		// magenta
+	color4(1.0, 1.0, 0.0, 1.0),		// yellow
+	color4(1.0, 0.0, 0.0, 1.0),		// red
+	color4(0.0, 1.0, 0.0, 1.0),		// green
+	color4(0.0, 0.0, 1.0, 1.0),		// blue
+	color4(1.0, 1.0, 1.0, 1.0)		// white
+};
 
 // cube 각 면의 normal vector 배열
 normal4 face_normals[6] = {
