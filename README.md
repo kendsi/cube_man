@@ -1,4 +1,4 @@
-# CAU 24-2 COMPUTER GRAPHICS PROJECT
+# CAU 24-2 COMPUTER GRAPHICS PROJECTS
 
 ## Project01 - Cubeman running - 🆗
 
